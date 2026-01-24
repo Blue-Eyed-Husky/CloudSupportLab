@@ -1,0 +1,2 @@
+my_ip_cidr = "your_public_ip"
+aws_region = "us-west-1"
