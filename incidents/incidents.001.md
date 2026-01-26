@@ -2,11 +2,11 @@
 
 
 
-Summary: SSH ingress rule was removed from Security Group. Upon attempting to access the EC2 via SSH, the user timed out. 
+Summary: SSH ingress rule was removed from Security Group. Upon attempting to access the EC2 via SSH, the user timed out.
 
 
 
-Symptom: User timed out when attempting to SSH into the instance. 
+Symptom: User timed out when attempting to SSH into the instance.
 
 
 
@@ -14,51 +14,51 @@ Impact: Only impacted the lab user leading to low level severity. If more were a
 
 
 
-Diagnosis: 
+Diagnosis:
 
-&nbsp;	Must check to confirm instance IP is correct
+ Must check to confirm instance IP is correct
 
-&nbsp;	Are route tables and internet gateway available
+ Are route tables and internet gateway available
 
-&nbsp;	Are there inbound rules in Security Group to allow port 22 SSH.
+ Are there inbound rules in Security Group to allow port 22 SSH.
 
 
 
 Evidence:
 
-&nbsp;	Terraform output instance\_state = "running"
+ Terraform output instance\_state = "running"
 
-&nbsp;	AWS console check:
+ AWS console check:
 
-&nbsp;		EC2 console -> instance -> Cloud lab instance = "running"
+ EC2 console -> instance -> Cloud lab instance = "running"
 
-&nbsp;		EC2 console -> Security Groups -> SSH ingress for port 22 missing/removed from user CIDR source
+ EC2 console -> Security Groups -> SSH ingress for port 22 missing/removed from user CIDR source
 
-&nbsp;		VPC console -> Subnets -> route table -> 0.0.0.0/0 through IGW
+ VPC console -> Subnets -> route table -> 0.0.0.0/0 through IGW
 
-&nbsp;		VPC console -> internet gateway -> attached to VPC
+ VPC console -> internet gateway -> attached to VPC
 
 
 
-Root Cause: 
+Root Cause:
 
-&nbsp;	Security Group inbound rule allowing SSH (TCP 22) from my source CIDR was not present, causing inbound packets to be dropped at the SG. 
+ Security Group inbound rule allowing SSH (TCP 22) from my source CIDR was not present, causing inbound packets to be dropped at the SG.
 
 
 
 Fix:
 
-&nbsp;	Restored inbound rule TCP 22 from user CIDR via terraform and ran terraform apply.
+ Restored inbound rule TCP 22 from user CIDR via terraform and ran terraform apply.
 
 
 
 Lessons
 
-&nbsp;	Learned a timeout means port 22 may be misplaced or missing meaning inbound traffic stalled once it reached the Security Group leading to timeout error. It was as if the building was open but the gate was locked preventing the user from reaching the front door. 
+ Learned a timeout means port 22 may be misplaced or missing meaning inbound traffic stalled once it reached the Security Group leading to timeout error. It was as if the building was open but the gate was locked preventing the user from reaching the front door.
 
 
 
-Validation: 
+Validation:
 
-&nbsp;	SSH access restored successfully after applying the SG inbound rules. 
+ SSH access restored successfully after applying the SG inbound rules.
 
