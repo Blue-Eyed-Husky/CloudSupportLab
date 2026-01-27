@@ -32,3 +32,8 @@ output "instance_state" {
   description = "EC2 Instance State"
   value       = aws_instance.cloud_lab_instance.instance_state
 }
+
+output "lab_bucket_name" {
+  description = "S3 Bucket Name"
+  value       = var.my_s3_bucket
+}

@@ -24,3 +24,8 @@ variable "subnet_cidr" {
   description = "The CIDR block for the subnet."
   type        = string
 }
+
+variable "my_s3_bucket" {
+  description = "The S3 bucket to use for storage."
+  type        = string
+}
