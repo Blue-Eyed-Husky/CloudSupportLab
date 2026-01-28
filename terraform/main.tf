@@ -97,10 +97,6 @@ resource "aws_instance" "cloud_lab_instance" {
 resource "aws_s3_bucket" "cloud_lab_bucket" {
   bucket = var.my_s3_bucket
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   tags = {
     Name = "cloud lab bucket"
   }
