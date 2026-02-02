@@ -1,14 +1,14 @@
-\##Failure Incident 4 - IAM Failure
+## Failure Incident 4 - IAM Failure
 
 
 
-\#Summary
+# Summary
 
 User was unable to access the s3 bucket cho-cloud-s3-bucket via instance. Instance permissions were removed/lost resulting in AccessDenied while the instance remained running and authenticated via its instance profile role.
 
 
 
-\#Symptom
+# Symptom
 
 attempting access the S3 bucket through the instance was denied
 
@@ -16,13 +16,13 @@ SSH into the instance -> aws s3 ls s3://cho-cloud-s3-bucket -> ":An error occurr
 
 
 
-\#Impact
+# Impact
 
 user unable to access s3 bucket - severity low
 
 
 
-\#Diagnosis
+# Diagnosis
 
 logged into terminal 
 
@@ -34,13 +34,13 @@ command 2: aws iam list-attached-role-policies --role-name cloud\_lab\_instance\
 
 
 
-\#Root Cause
+# Root Cause
 
 Instance not able to access S3 bucket due to the removal/loss of IAM permissions of the S3 bucket. 
 
 
 
-\#Fix 
+# Fix 
 
 Restored required S3 permissions via IAM policy role attachment to S3 bucket. 
 
@@ -48,7 +48,7 @@ Terraform apply --auto-approve
 
 
 
-\#Validation
+# Validation
 
 Following SSH into the instance, S3 bucket was accessible. 
 
