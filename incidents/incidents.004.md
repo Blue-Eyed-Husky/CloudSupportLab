@@ -55,4 +55,3 @@ Following SSH into the instance, S3 bucket was accessible.
 aws s3 ls s3://cho-cloud-s3-bucket
 
 aws s3 ls s3://cho-cloud-s3-bucket/iam/
-
