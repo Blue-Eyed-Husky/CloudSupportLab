@@ -3,6 +3,7 @@
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,35 +13,90 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Simple test
-        shell: bash
-        run: |
-          test -f site/index.html
-          echo "site/index.html found ✅"
-
-      - name: Prepare SSH key
+      - name: Simple test (fail fast)
         shell: bash
         run: |
           set -euo pipefail
+          test -f site/index.html
+          echo "site/index.html found ✅"
+
+      - name: Prepare SSH key + connectivity check
+        shell: bash
+        run: |
+          set -euo pipefail
+
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.EC2_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 
-          ssh -o StrictHostKeyChecking=no -o connecttimeout=10 \ 
-            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "echo 'SSH connection established'"
+          HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
+
+          # Best-effort known_hosts population (do not fail job if keyscan can't reach host)
+          ssh-keyscan -H "$HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+
+          echo "Checking SSH connectivity..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$USER@$HOST" "echo SSH_OK"
 
       - name: Upload site to EC2 staging folder
         shell: bash
         run: |
-          ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ~/cloudsupportlab/site"
-          scp -r site/* "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/cloudsupportlab/site/"
+          set -euo pipefail
 
-      - name: Deploy to web root + reload nginx
+          HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
+
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$USER@$HOST" "mkdir -p /opt/cloudsupportlab/site"
+
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -r \
+            site/* "$USER@$HOST:/opt/cloudsupportlab/site/"
+
+      - name: Deploy to web root + reload nginx (with backup)
+        id: deploy_step
         shell: bash
         run: |
-          ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "
-            sudo rsync -a --delete ~/cloudsupportlab/site/ /var/www/html/ &&
-            sudo nginx -t &&
-            sudo systemctl reload nginx
-          "
+          set -euo pipefail
+
+          HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
+
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$USER@$HOST" '
+              set -euo pipefail
+
+              echo "==> Backing up current site"
+              sudo mkdir -p /opt/cloudsupportlab/backup
+              sudo rsync -a --delete /var/www/html/ /opt/cloudsupportlab/backup/ || true
+
+              echo "==> Deploying new site"
+              sudo rsync -a --delete /opt/cloudsupportlab/site/ /var/www/html/
+
+              echo "==> Validating nginx config"
+              sudo nginx -t
+
+              echo "==> Reloading nginx"
+              sudo systemctl reload nginx
+
+              echo "✅ Deploy complete"
+            '
+
+      - name: Rollback (if deploy failed)
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
+          USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
+
+          echo "Deploy failed — rolling back from backup..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            "$USER@$HOST" '
+              set -euo pipefail
+              sudo rsync -a --delete /opt/cloudsupportlab/backup/ /var/www/html/
+              sudo nginx -t
+              sudo systemctl reload nginx
+              echo "✅ Rollback complete"
+            '
