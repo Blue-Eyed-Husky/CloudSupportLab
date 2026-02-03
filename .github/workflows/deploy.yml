@@ -67,17 +67,17 @@ jobs:
               set -euo pipefail
 
               echo "==> Backing up current site"
-              sudo mkdir -p /opt/cloudsupportlab/backup
-              sudo rsync -a --delete /var/www/html/ /opt/cloudsupportlab/backup/ || true
+              sudo -n mkdir -p /opt/cloudsupportlab/backup
+              sudo -n rsync -a --delete /var/www/html/ /opt/cloudsupportlab/backup/ || true
 
               echo "==> Deploying new site"
-              sudo rsync -a --delete /opt/cloudsupportlab/site/ /var/www/html/
+              sudo -n rsync -a --delete /opt/cloudsupportlab/site/ /var/www/html/
 
               echo "==> Validating nginx config"
-              sudo nginx -t
+              sudo -n nginx -t
 
               echo "==> Reloading nginx"
-              sudo systemctl reload nginx
+              sudo -n systemctl reload nginx
 
               echo "✅ Deploy complete"
             '
@@ -95,8 +95,8 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
             "$USER@$HOST" '
               set -euo pipefail
-              sudo rsync -a --delete /opt/cloudsupportlab/backup/ /var/www/html/
-              sudo nginx -t
-              sudo systemctl reload nginx
+              sudo -n rsync -a --delete /opt/cloudsupportlab/backup/ /var/www/html/
+              sudo -n nginx -t
+              sudo -n systemctl reload nginx
               echo "✅ Rollback complete"
             '
