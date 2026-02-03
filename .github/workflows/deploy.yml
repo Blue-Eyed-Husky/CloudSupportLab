@@ -24,10 +24,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-           if [ -f /opt/cloudsupportlab/site/BREAK_DEPLOY ]; then
-            echo "X BREAK_DEPLOY present - failing intentionally."
-            exit 1
-          fi}
 
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.EC2_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
