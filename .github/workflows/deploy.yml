@@ -87,16 +87,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
           USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
 
-          echo "Deploy failed — rolling back from backup..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            "$USER@$HOST" '
-              set -euo pipefail
-              sudo -n rsync -a --delete /opt/cloudsupportlab/backup/ /var/www/html/
-              sudo -n nginx -t
-              sudo -n systemctl reload nginx
-              echo "✅ Rollback complete"
-            '
+          echo "Deploy failed — attempting rollback..."
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$USER@$HOST" '
+            set -euo pipefail
+
+            if [ ! -d /opt/cloudsupportlab/backup ] || [ -z "$(ls -A /opt/cloudsupportlab/backup 2>/dev/null)" ]; then
+              echo "⚠️ No backup found at /opt/cloudsupportlab/backup — skipping rollback."
+              exit 0
+            fi
+
+            sudo -n rsync -a --delete /opt/cloudsupportlab/backup/ /var/www/html/
+            sudo -n nginx -t
+            sudo -n systemctl reload nginx
+            echo "✅ Rollback complete"
+          '
