@@ -23,42 +23,47 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy via SSM Run Command
+      - name: Deploy via SSM Run Command (force bash)
         shell: bash
         run: |
           set -euo pipefail
 
           INSTANCE_ID="${{ secrets.SSM_INSTANCE_ID }}"
-
           echo "Sending SSM command to $INSTANCE_ID..."
 
-          # Example deploy: pull latest repo content on the instance and restart nginx
-          # IMPORTANT: adjust paths/commands for your setup.
-          COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --comment "GitHub Actions deploy" \
-            --parameters commands='[
-              "set -euo pipefail",
-              "echo DEPLOY_START: $(date -Is)",
-              "cd /var/www/html || exit 1",
-              "sudo git pull origin main",
-              "sudo systemctl restart nginx",
-              "echo DEPLOY_DONE: $(date -Is)"
-            ]' \
-            --query "Command.CommandId" \
-            --output text)
+          # Send ONE remote command that runs entirely inside bash.
+          COMMAND_ID=$(
+            aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "GitHub Actions deploy (bash forced)" \
+              --parameters 'commands=["bash -lc '\''set -euo pipefail
+                echo DEPLOY_START: $(date -Is)
+
+                # Update this path if your site/app lives elsewhere
+                cd /var/www/html
+
+                # If you use a different deploy mechanism, change these lines
+                sudo git pull origin main
+                sudo systemctl restart nginx
+
+                echo DEPLOY_DONE: $(date -Is)
+              '\''"]' \
+              --query "Command.CommandId" \
+              --output text
+          )
 
           echo "CommandId: $COMMAND_ID"
           echo "Waiting for command to finish..."
 
-          # Poll until the command finishes
           while true; do
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$INSTANCE_ID" \
-              --query "Status" \
-              --output text || true)
+            STATUS=$(
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query "Status" \
+                --output text 2>/dev/null || true
+            )
 
             echo "Status: $STATUS"
 
@@ -70,20 +75,7 @@ jobs:
               Failed|Cancelled|TimedOut)
                 echo "❌ Deploy failed with status: $STATUS"
                 echo "---- STDOUT ----"
-                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
-                echo "---- STDERR ----"
-                aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardErrorContent" --output text || true
-                exit 1
-                ;;
-              Pending|InProgress|Delayed)
-                sleep 5
-                ;;
-              *)
-                echo "Unknown status: $STATUS"
-                sleep 5
-                ;;
-            esac
-          done
-
-          echo "Showing output:"
-          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text || true
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "S
