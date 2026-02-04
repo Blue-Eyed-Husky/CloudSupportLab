@@ -26,7 +26,8 @@ jobs:
           set -euo pipefail
 
           mkdir -p "$HOME/.ssh"
-          echo "${{ secrets.EC2_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
+          # Use printf (more reliable than echo for multiline secrets)
+          printf "%s" "${{ secrets.EC2_SSH_KEY }}" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
 
           HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
@@ -36,7 +37,8 @@ jobs:
           ssh-keyscan -H "$HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
 
           echo "Checking SSH connectivity..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          # Explicitly specify key with -i
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
             "$USER@$HOST" "echo SSH_OK"
 
       - name: Upload site to EC2 staging folder
@@ -47,10 +49,10 @@ jobs:
           HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
           USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
 
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
             "$USER@$HOST" "mkdir -p /opt/cloudsupportlab/site"
 
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -r \
+          scp -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=no -o ConnectTimeout=10 -r \
             site/* "$USER@$HOST:/opt/cloudsupportlab/site/"
 
       - name: Deploy to web root + reload nginx (with backup)
@@ -62,13 +64,23 @@ jobs:
           HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
           USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
 
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
             "$USER@$HOST" '
               set -euo pipefail
 
               echo "==> Backing up current site"
               sudo -n mkdir -p /opt/cloudsupportlab/backup
               sudo -n rsync -a --delete /var/www/html/ /opt/cloudsupportlab/backup/ || true
+
+              # Show what is in staging (proves BREAK_DEPLOY/file transfer)
+              echo "==> Staging contents:"
+              ls -la /opt/cloudsupportlab/site || true
+
+              # BREAK_DEPLOY check (after backup, before deploy)
+              if [ -f /opt/cloudsupportlab/site/BREAK_DEPLOY ]; then
+                echo "❌ BREAK_DEPLOY present - failing intentionally"
+                exit 1
+              fi
 
               echo "==> Deploying new site"
               sudo -n rsync -a --delete /opt/cloudsupportlab/site/ /var/www/html/
@@ -91,7 +103,7 @@ jobs:
           USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
 
           echo "Deploy failed — attempting rollback..."
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$USER@$HOST" '
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$USER@$HOST" '
             set -euo pipefail
 
             if [ ! -d /opt/cloudsupportlab/backup ] || [ -z "$(ls -A /opt/cloudsupportlab/backup 2>/dev/null)" ]; then
@@ -104,3 +116,4 @@ jobs:
             sudo -n systemctl reload nginx
             echo "✅ Rollback complete"
           '
+
