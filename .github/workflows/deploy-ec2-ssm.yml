@@ -23,7 +23,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy via SSM Run Command (force bash)
+      - name: Deploy via SSM Run Command (force bash, no quote issues)
         shell: bash
         run: |
           set -euo pipefail
@@ -31,24 +31,30 @@ jobs:
           INSTANCE_ID="${{ secrets.SSM_INSTANCE_ID }}"
           echo "Sending SSM command to $INSTANCE_ID..."
 
-          # Send ONE remote command that runs entirely inside bash.
+          # Build the remote script locally (readable, versionable)
+          read -r -d '' REMOTE_SCRIPT <<'EOF'
+          set -euo pipefail
+
+          echo "DEPLOY_START: $(date -Is)"
+
+          cd /var/www/html
+
+          sudo git pull origin main
+          sudo systemctl restart nginx
+
+          echo "DEPLOY_DONE: $(date -Is)"
+          EOF
+
+          # Force bash on the instance by wrapping the script in: bash -lc "<script>"
+          # Use jq to JSON-escape the script so quoting can't break the runner shell.
+          COMMAND_LINE=$(jq -Rs . <<< "bash -lc $REMOTE_SCRIPT")
+
           COMMAND_ID=$(
             aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
               --comment "GitHub Actions deploy (bash forced)" \
-              --parameters 'commands=["bash -lc '\''set -euo pipefail
-                echo DEPLOY_START: $(date -Is)
-
-                # Update this path if your site/app lives elsewhere
-                cd /var/www/html
-
-                # If you use a different deploy mechanism, change these lines
-                sudo git pull origin main
-                sudo systemctl restart nginx
-
-                echo DEPLOY_DONE: $(date -Is)
-              '\''"]' \
+              --parameters "$(jq -n --arg cmd "$(jq -r . <<<"$COMMAND_LINE")" '{commands:[$cmd]}')" \
               --query "Command.CommandId" \
               --output text
           )
@@ -78,4 +84,29 @@ jobs:
                 aws ssm get-command-invocation \
                   --command-id "$COMMAND_ID" \
                   --instance-id "$INSTANCE_ID" \
-                  --query "S
+                  --query "StandardOutputContent" \
+                  --output text || true
+                echo "---- STDERR ----"
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --query "StandardErrorContent" \
+                  --output text || true
+                exit 1
+                ;;
+              Pending|InProgress|Delayed|"")
+                sleep 5
+                ;;
+              *)
+                echo "Unknown status: $STATUS"
+                sleep 5
+                ;;
+            esac
+          done
+
+          echo "---- FINAL STDOUT ----"
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" \
+            --output text || true
