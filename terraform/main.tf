@@ -96,7 +96,7 @@ resource "aws_instance" "cloud_lab_instance" {
 
   depends_on = [aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment,
     aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment
+    aws_iam_role_policy_attachment.cloud_lab_artifacts_read_attachment
   ]
 }
 
@@ -119,6 +119,67 @@ resource "aws_s3_bucket_public_access_block" "cloud_lab_bucket_pab" {
   restrict_public_buckets = true
 }
 
+# add s3 artifacts bucket
+resource "aws_s3_bucket" "cloud_lab_artifacts_bucket" {
+  bucket = var.s3_artifacts_bucket
+
+  tags = {
+    Name = "cloud lab artifacts bucket"
+  }
+}
+
+# Add artifacts policy public access block
+resource "aws_s3_bucket_public_access_block" "cloud_lab_artifacts_bucket_pab" {
+  bucket = aws_s3_bucket.cloud_lab_artifacts_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Allow EC2 to READ deploy artifacts from the artifacts bucket (least privilege)
+resource "aws_iam_policy" "cloud_lab_artifacts_read_policy" {
+  name        = "cloud_lab_artifacts_read_policy"
+  description = "Allow EC2 instance to read deployment artifacts from the artifacts bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ListDeployPrefixOnly"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.cloud_lab_artifacts_bucket.arn
+        ]
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["deploy/*"]
+          }
+        }
+      },
+      {
+        Sid    = "GetDeployArtifactsOnly"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.cloud_lab_artifacts_bucket.arn}/deploy/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Attach the artifacts read-only policy to the EC2 instance role
+resource "aws_iam_role_policy_attachment" "cloud_lab_artifacts_read_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = aws_iam_policy.cloud_lab_artifacts_read_policy.arn
+}
 # IAM Role for EC2 to access S3
 resource "aws_iam_role" "cloud_lab_instance_role" {
   name = "cloud_lab_instance_role"

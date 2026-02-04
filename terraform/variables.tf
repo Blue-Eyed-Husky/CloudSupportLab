@@ -29,3 +29,8 @@ variable "my_s3_bucket" {
   description = "The S3 bucket to use for storage."
   type        = string
 }
+
+variable "s3_artifacts_bucket" {
+  description = "The S3 bucket to use for deployment artifacts."
+  type        = string
+}
