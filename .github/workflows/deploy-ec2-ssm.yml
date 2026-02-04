@@ -76,8 +76,10 @@ jobs:
             'if ! command -v unzip >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y unzip; fi' \
             'rm -rf extracted && mkdir -p extracted' \
             'unzip -q artifact.zip -d extracted' \
+            'SITE_DIR="$(find extracted -type d -name site | head -n 1)"' \
+            'if [ -z "$SITE_DIR" ]; then echo "ERROR: site/ directory not found in artifact"; exit 1; fi' \
             'sudo rm -rf /var/www/html/*' \
-            'sudo cp -r extracted/* /var/www/html/' \
+            'sudo cp -r "$SITE_DIR"/* /var/www/html/' \
             'sudo systemctl restart nginx' \
             'echo "DEPLOY_DONE: $(date -Is)"' \
           )"
