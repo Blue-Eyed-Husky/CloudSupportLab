@@ -82,8 +82,10 @@ resource "aws_instance" "cloud_lab_instance" {
   instance_type             = var.instance_type
   key_name                  = "cloud_lab_key"
   subnet_id                 = aws_subnet.cloud_lab_subnet.id
-  security_groups           = [aws_security_group.cloud_lab_sg.id]
+  #security_groups           = [aws_security_group.cloud_lab_sg.id]
   associate_public_ip_address = true
+
+  vpc_security_group_ids = [aws_security_group.cloud_lab_sg.id]
   iam_instance_profile = aws_iam_instance_profile.cloud_lab_instance_profile.name
 
   user_data = file("${path.module}/user_data.sh")
@@ -91,6 +93,11 @@ resource "aws_instance" "cloud_lab_instance" {
   tags = {
     Name = "cloud lab instance"
   }
+
+  depends_on = [aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment,
+    aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment, 
+    aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment
+    ]
 }
 
 # Add s3 bucket to instance role"
@@ -161,13 +168,13 @@ resource "aws_iam_role_policy_attachment" "cloud_lab_instance_role_attachment" {
   policy_arn = aws_iam_policy.cloud_lab_s3_policy.arn
 }
 
-# # attach iam role to ssm instance profile
-# resource "aws_iam_role_policy_attachment" "cloud_lab_ssm_role_attachment" {
-#   role       = aws_iam_role.cloud_lab_instance_role.name
-#   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-# }
+# attach iam role to ssm instance profile
+resource "aws_iam_role_policy_attachment" "cloud_lab_ssm_role_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-# IAM instance prfile for Ec2
+# IAM instance profile for EC2
 resource "aws_iam_instance_profile" "cloud_lab_instance_profile" {
   name = "cloud_lab_instance_profile"
   role = aws_iam_role.cloud_lab_instance_role.name
