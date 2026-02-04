@@ -24,7 +24,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy via SSM Run Command (force bash)
+      - name: Deploy via SSM Run Command (force bash, base64 script)
         shell: bash
         run: |
           set -euo pipefail
@@ -35,7 +35,7 @@ jobs:
           aws --version
           aws sts get-caller-identity
 
-          # Build the remote script safely (no quote gymnastics)
+          # Build the remote script
           REMOTE_SCRIPT="$(cat <<'EOF'
           set -euo pipefail
 
@@ -50,10 +50,13 @@ jobs:
           EOF
           )"
 
-          # Force bash on the instance. printf %q produces a safely-quoted string for bash -lc
-          REMOTE_CMD="bash -lc $(printf %q "$REMOTE_SCRIPT")"
+          # Base64 encode it (single line)
+          B64="$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)"
 
-          # Build the correct JSON for --parameters: {"commands":["..."]}
+          # Remote command: decode + execute with bash
+          REMOTE_CMD="echo '$B64' | base64 -d | bash -s"
+
+          # Build proper JSON params for SSM
           PARAMS="$(jq -cn --arg cmd "$REMOTE_CMD" '{commands: [$cmd]}')"
 
           echo "Calling send-command..."
@@ -61,7 +64,7 @@ jobs:
           SEND_OUT="$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "GitHub Actions deploy (bash forced)" \
+            --comment "GitHub Actions deploy (bash forced, base64)" \
             --parameters "$PARAMS" \
             --query "Command.CommandId" \
             --output text 2>&1)"
