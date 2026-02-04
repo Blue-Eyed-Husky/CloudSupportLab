@@ -1,8 +1,8 @@
 # Create a VPC
 resource "aws_vpc" "cloud_lab_vpc" {
-  cidr_block = var.vpc_cidr
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
-  enable_dns_support = true
+  enable_dns_support   = true
 
   tags = {
     Name = "cloud lab vpc"
@@ -79,14 +79,14 @@ resource "aws_security_group" "cloud_lab_sg" {
 # Create an EC2 Instance
 resource "aws_instance" "cloud_lab_instance" {
   ami           = "ami-0290e60ec230db1e4" # Amazon Ubuntu 20.04 LTS in us-west-1
-  instance_type             = var.instance_type
-  key_name                  = "cloud_lab_key"
-  subnet_id                 = aws_subnet.cloud_lab_subnet.id
+  instance_type = var.instance_type
+  key_name      = "cloud_lab_key"
+  subnet_id     = aws_subnet.cloud_lab_subnet.id
   #security_groups           = [aws_security_group.cloud_lab_sg.id]
   associate_public_ip_address = true
 
   vpc_security_group_ids = [aws_security_group.cloud_lab_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.cloud_lab_instance_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.cloud_lab_instance_profile.name
 
   user_data = file("${path.module}/user_data.sh")
 
@@ -95,9 +95,9 @@ resource "aws_instance" "cloud_lab_instance" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment, 
+    aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment,
     aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment
-    ]
+  ]
 }
 
 # Add s3 bucket to instance role"
@@ -152,7 +152,7 @@ resource "aws_iam_policy" "cloud_lab_s3_policy" {
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
           aws_s3_bucket.cloud_lab_bucket.arn,
           "${aws_s3_bucket.cloud_lab_bucket.arn}/*"
