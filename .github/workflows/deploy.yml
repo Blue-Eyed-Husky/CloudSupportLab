@@ -87,6 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           HOST="$(printf "%s" "${{ secrets.EC2_HOST }}" | tr -d '\r\n')"
           USER="$(printf "%s" "${{ secrets.EC2_USER }}" | tr -d '\r\n')"
 
