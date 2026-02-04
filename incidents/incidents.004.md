@@ -1,4 +1,4 @@
-## Failure Incident 4 - IAM Failure
+## Failure Incident 4 - IAM Failure loss of permissions for S3 bucket
 
 
 

@@ -1,4 +1,4 @@
-## Failure Scenario - NGINX failure 
+## Failure Scenario 3 - NGINX failure 
 
 # Summary
 User attempted to access NGINX with HTTP://<public-ip>. User received 
