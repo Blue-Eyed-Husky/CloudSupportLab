@@ -37,3 +37,8 @@ output "lab_bucket_name" {
   description = "S3 Bucket Name"
   value       = var.my_s3_bucket
 }
+
+output "ec2_id" {
+  description = "EC2 Instance ID"
+  value       = aws_instance.cloud_lab_instance.id
+}

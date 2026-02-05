@@ -96,7 +96,8 @@ resource "aws_instance" "cloud_lab_instance" {
 
   depends_on = [aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment,
     aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_artifacts_read_attachment
+    aws_iam_role_policy_attachment.cloud_lab_artifacts_read_attachment,
+    aws_iam_role_policy_attachment.cloud_lab_cloudwatch_role_attachment
   ]
 }
 
@@ -239,4 +240,28 @@ resource "aws_iam_role_policy_attachment" "cloud_lab_ssm_role_attachment" {
 resource "aws_iam_instance_profile" "cloud_lab_instance_profile" {
   name = "cloud_lab_instance_profile"
   role = aws_iam_role.cloud_lab_instance_role.name
+}
+
+# Adding CloudWatch policy to instance role for logging
+resource "aws_iam_role_policy_attachment" "cloud_lab_cloudwatch_role_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# Creating cloudwatch log group for nginx access logs
+resource "aws_cloudwatch_log_group" "cloud_lab_nginx_access" {
+  name              = "/cloud_lab/nginx/access"
+  retention_in_days = 7
+}
+
+# Creating cloudwatch log groupo for nginx errors
+resource "aws_cloudwatch_log_group" "cloud_lab_nginx_error" {
+  name              = "/cloud_lab/nginx/error"
+  retention_in_days = 7
+}
+
+# Creating cloudwatch log group for deploy logs
+resource "aws_cloudwatch_log_group" "cloud_lab_deploy" {
+  name              = "/cloud_lab/deploy"
+  retention_in_days = 7
 }
