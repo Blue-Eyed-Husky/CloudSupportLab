@@ -124,7 +124,6 @@ resource "aws_cloudtrail" "main" {
   }
 }
 
-
 ############################################
 # IAM (role, instance profile, policies)
 ############################################

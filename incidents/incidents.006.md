@@ -1,16 +1,24 @@
 ## Incident 006 - CloudWatch Logs failures (Bootsrap Failed)
 
 ## Summary
-CloudWatch was not installing into the instance due to early termination in the EC2 user_data boostrap script that exited early during the SSM agent installation due to a snap vs deb package conflict. Since user_data termianted before CloudWatch agent install step, the agen never installed and logs were never shipped. 
+CloudWatch Logs were not being shipped from the EC2 instance because the CloudWatch Agent was never installed. The issue was caused by an early exit in the EC2 `user_data` bootstrap script during the SSM agent setup. A package conflict between a snap-installed SSM agent and a `.deb` installation caused the script to terminate before reaching the CloudWatch Agent installation step.
+
+As a result, the instance came online without log shipping enabled.
 
 ## Impact 
-No deploy evidence logs in CloudWatch
-Severity: low. All other environments were funcational with the lack of logs 
+No NGINX access, error, or deploy logs were available in CloudWatch.
+No deployment audit trail during this period.
+**Severity: Low** — the application itself was functional; only observability was affected.
 
 ## Symptoms
-CLoudWatch log groups were created via terraform but 
-    no logs streams appeared in any of the log groups (/cloud_lab/nginx/access, cloud_lab/nginx/error, cloud_lab/deploy)
-In SSM, sudo systemctl status amazon-cloudwatch-agent --no-pager -> service not found
+- CloudWatch log groups were successfully created via Terraform:
+  - `/cloud_lab/nginx/access`
+  - `/cloud_lab/nginx/error`
+  - `/cloud_lab/deploy`
+No log streams or events appeared in any of the log groups.
+On the instance:
+-  ```bash
+sudo systemctl status amazon-cloudwatch-agent --no-pager
 
 ## Detection and Verification
 The issue was identified by checking cloud-init and boostrap output on the instance: 
@@ -18,10 +26,10 @@ The issue was identified by checking cloud-init and boostrap output on the insta
     Log showed SSM installation errors indicating a packaging conflict
 
 ## Root Cause
-'user_data.sh' attempted to isntall and enable the SSM agent using a '.deb' package and service that was already installed via snap that uses a different service unit. Du eto this the '.deb' installation failed and the script exited early due to 'set -e' prevent further isntallations including CloudWatch agent installation and configuration.
+'user_data.sh' attempted to install and enable the SSM agent using a '.deb' package and service that was already installed via snap that uses a different service unit. Due to this the '.deb' installation failed and the script exited early due to 'set -e' prevent further isntallations including CloudWatch agent installation and configuration.
 
 ## Resolution
-Modified the 'user_data.sh' SSM seciton to detect snap unit existence and enable that service if present
+Modified the 'user_data.sh' SSM section to detect snap unit existence and enable that service if present
 Ensure failures in the SSM section does not halt the entire bootstrap
 Recreated the EC2 isntance to run 'user_data.sh' cleanly
 Verified CloudWatch Agent installed and shipping logs: 
