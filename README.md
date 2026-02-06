@@ -33,15 +33,15 @@ Key concepts demonstrated:
 - .github/workflows/ - CI/CD pipeline deploying via S3 + SSM
 
 ## CI/CD Deployment Flow
-git push
+- git push
 ↓
-GitHub Actions packages site into artifact
+- GitHub Actions packages site into artifact
 ↓
-Artifact uploaded to private S3 bucket
+- Artifact uploaded to private S3 bucket
 ↓
-SSM Run Command triggers deploy on EC2
+- SSM Run Command triggers deploy on EC2
 ↓
-EC2 downloads artifact and updates nginx root
+- EC2 downloads artifact and updates nginx root
 
 No SSH. No git on server. Fully IAM-controlled.
 
