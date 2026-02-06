@@ -33,7 +33,7 @@ fi
 echo "AWS_CLI_VERSION: $(aws --version 2>&1)" | tee -a "$LOG_DEPLOY"
 
 ############################################
-# SSM Agent (best practice: install official deb)
+# SSM Agent
 # This makes the instance show up in Systems Manager reliably.
 ############################################
 echo "SSM_SETUP_START: $(date -Is)" | tee -a "$LOG_DEPLOY"
@@ -61,7 +61,6 @@ echo "SSM_SETUP_DONE: $(date -Is)" | tee -a "$LOG_DEPLOY"
 
 ############################################
 # NGINX
-# Your deploy.yml copies into /var/www/html and restarts nginx.
 ############################################
 systemctl enable --now nginx
 

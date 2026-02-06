@@ -27,7 +27,7 @@ Key concepts demonstrated:
   site/ - static website served by nginx
   .github/workflows/ - CI/CD pipeline deploying via S3 + SSM
 
-## CI/Cd Deployment Flow
+## CI/CD Deployment Flow
 git push
 ↓
 GitHub Actions packages site into artifact

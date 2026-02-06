@@ -19,23 +19,23 @@ This eliminated the need for Git on the server, removed credential management fr
 
 The pipeline attempted: git push -> GitHub Actions -> SSM -> git pull -> restart nginx
 
-# Failure
+## Failure
 /var/www/html was not a git clone
 EC2 did not have GitHub credentials
 The server should not be responsible for pulling source code
 
-# Symptoms
+## Symptoms
 SSM rum Command succeeded but 'git pull' failed
 NGINX returned '403 forbidden'
 Files deployed to incorrect directory structure (site/ folder not aligned with nginx root)
 Mulitple failures related to quoting, shell parsing, and parameter formatting when passing scripts through SSM
 
-# Root Cause
+## Root Cause
 The deployment strategy assumed a traditional SSH + git server workflow. 
 Artifacts shoudl be delivered to the server, not pulled from source control
 SSM shoudl be used for remote execution, not SSH
 
-# Resolution
+## Resolution
 The deployment pipeline was redesigned to: 
     Package the site as a zip artifact in GitHub Actions
     Upload the artifact to a private s3 bucket
@@ -53,7 +53,7 @@ This ensured:
 ## Final Deployment Flow
 git push -> GitHub Actions runner -> zip artifact -> upload to private S3 -> SSM Run Command -> EC2 downloads artifact -> site files placed correctly for NGINX -> nginx restart
 
-# Lesson learned
+## Lesson learned
 'git pull' is an anti-pattern for cloud deployments
 SSM Run Command requires careful handling of shell quoting and JSON paramters
 Artifact-based deployment is more secure and reliable

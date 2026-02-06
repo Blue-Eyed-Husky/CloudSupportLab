@@ -34,3 +34,8 @@ variable "s3_artifacts_bucket" {
   description = "The S3 bucket to use for deployment artifacts."
   type        = string
 }
+
+variable "s3_cloudtrail_bucket" {
+  description = "The S3 bucket to use for CloudTrail logs."
+  type        = string
+}

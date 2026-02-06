@@ -99,6 +99,33 @@ resource "aws_cloudwatch_log_group" "cloud_lab_deploy" {
 }
 
 ############################################
+# CloudTrail trail
+############################################
+
+resource "aws_cloudtrail" "main" {
+  name                          = "cloud_lab_trail"
+  s3_bucket_name                = aws_s3_bucket.cloud_lab_cloudtrail_bucket.bucket
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+  enable_logging                = true
+
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:aws:s3:::${aws_s3_bucket.cloud_lab_bucket.bucket}/"]
+    }
+  }
+
+  tags = {
+    Name = "cloud lab cloudtrail"
+  }
+}
+
+
+############################################
 # IAM (role, instance profile, policies)
 ############################################
 
@@ -224,6 +251,54 @@ resource "aws_iam_role_policy_attachment" "cloud_lab_logs_attachment" {
   policy_arn = aws_iam_policy.cloud_lab_logs_policy.arn
 }
 
+# Get current account id (for AWSLogs/<account-id>/ path)
+data "aws_caller_identity" "current" {}
+
+# CloudTrail bucket policy document
+data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
+  statement {
+    sid     = "AWSCloudTrailAclCheck20150319"
+    effect  = "Allow"
+    actions = ["s3:GetBucketAcl"]
+
+    resources = [
+      aws_s3_bucket.cloud_lab_cloudtrail_bucket.arn
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid     = "AWSCloudTrailWrite20150319"
+    effect  = "Allow"
+    actions = ["s3:PutObject"]
+
+    resources = [
+      "${aws_s3_bucket.cloud_lab_cloudtrail_bucket.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+    ]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }
+  }
+}
+
+# Attach the policy to the S3 bucket (this is the actual "bucket policy")
+resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
+  bucket = aws_s3_bucket.cloud_lab_cloudtrail_bucket.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy.json
+}
+
 ############################################
 # S3 Buckets
 ############################################
@@ -255,6 +330,41 @@ resource "aws_s3_bucket" "cloud_lab_artifacts_bucket" {
 
 resource "aws_s3_bucket_public_access_block" "cloud_lab_artifacts_bucket_pab" {
   bucket = aws_s3_bucket.cloud_lab_artifacts_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket" "cloud_lab_cloudtrail_bucket" {
+  bucket = var.s3_cloudtrail_bucket
+
+  tags = {
+    Name = "cloud lab cloudtrail bucket"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "cloud_lab_cloudtrail_bucket_versioning" {
+  bucket = aws_s3_bucket.cloud_lab_cloudtrail_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloud_lab_cloudtrail_bucket_sse" {
+  bucket = aws_s3_bucket.cloud_lab_cloudtrail_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloud_lab_cloudtrail_bucket_pab" {
+  bucket = aws_s3_bucket.cloud_lab_cloudtrail_bucket.id
 
   block_public_acls       = true
   block_public_policy     = true
