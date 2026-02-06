@@ -1,11 +1,13 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 CW_DEB_URL="https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb"
 CW_JSON="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
 
 apt-get update -y
 apt-get install -y nginx rsync curl ca-certificates snapd
+
+apt-get install -y awscli --classic
 
 # SSM Agent (snap)
 snap install amazon-ssm-agent --classic || true
