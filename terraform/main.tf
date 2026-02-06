@@ -80,7 +80,7 @@ resource "aws_security_group" "cloud_lab_sg" {
 }
 
 ############################################
-# CloudWatch Logs (match user_data.sh prefix)
+# CloudWatch Logs
 ############################################
 
 resource "aws_cloudwatch_log_group" "cloud_lab_nginx_access" {
