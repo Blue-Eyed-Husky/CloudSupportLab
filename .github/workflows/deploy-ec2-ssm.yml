@@ -67,21 +67,27 @@ jobs:
           # Build the remote deploy script without heredocs (avoids YAML/EOF indentation issues)
           REMOTE_SCRIPT="$(printf '%s\n' \
             'set -euo pipefail' \
-            'echo "DEPLOY_START: $(date -Is)"' \
+            'sudo mkdir -p /var/log' \
+            'touch /var/log/deploy.log && sudo chmod 644 /var/log/deploy.log' \
+            'echo "DEPLOY_START: $(date -Is)" | sudo tee -a /var/log/deploy.log' \
+            'trap '\''echo "DEPLOY_STATUS=failure TIME=$(date -Is)" | sudo tee -a /var/log/deploy.log'\'' ERR' \
+            "echo \"DEPLOY_ARTIFACT=s3://${BUCKET}/${KEY}\" | sudo tee -a /var/log/deploy.log" \
+            "echo \"DEPLOY_COMMIT=${GITHUB_SHA}\" | sudo tee -a /var/log/deploy.log" \
             'TMP_DIR="/tmp/deploy_$(date +%s)"' \
             'mkdir -p "$TMP_DIR"' \
             'cd "$TMP_DIR"' \
-            "echo \"Downloading: s3://${BUCKET}/${KEY}\"" \
+            "echo \"Downloading: s3://${BUCKET}/${KEY}\" | sudo tee -a /var/log/deploy.log" \
             "aws s3 cp \"s3://${BUCKET}/${KEY}\" artifact.zip" \
             'if ! command -v unzip >/dev/null 2>&1; then sudo apt-get update -y && sudo apt-get install -y unzip; fi' \
             'rm -rf extracted && mkdir -p extracted' \
             'unzip -q artifact.zip -d extracted' \
             'SITE_DIR="$(find extracted -type d -name site | head -n 1)"' \
-            'if [ -z "$SITE_DIR" ]; then echo "ERROR: site/ directory not found in artifact"; exit 1; fi' \
+            'if [ -z "$SITE_DIR" ]; then echo "ERROR: site/ directory not found in artifact" | sudo tee -a /var/log/deploy.log; exit 1; fi' \
             'sudo rm -rf /var/www/html/*' \
             'sudo cp -r "$SITE_DIR"/* /var/www/html/' \
             'sudo systemctl restart nginx' \
-            'echo "DEPLOY_DONE: $(date -Is)"' \
+            'echo "DEPLOY_DONE: $(date -Is)" | sudo tee -a /var/log/deploy.log' \
+            'echo "DEPLOY_STATUS=success" | sudo tee -a /var/log/deploy.log' \
           )"
 
           B64="$(printf '%s' "$REMOTE_SCRIPT" | base64 -w0)"
