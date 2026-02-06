@@ -36,14 +36,28 @@ echo "AWS_CLI_VERSION: $(aws --version 2>&1)" | tee -a "$LOG_DEPLOY"
 # SSM Agent (best practice: install official deb)
 # This makes the instance show up in Systems Manager reliably.
 ############################################
-if ! systemctl is-active --quiet amazon-ssm-agent; then
-  TMP_SSM_DEB="/tmp/amazon-ssm-agent.deb"
-  curl -fsSL "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb" -o "$TMP_SSM_DEB"
-  dpkg -i "$TMP_SSM_DEB" || apt-get -f install -y
-  systemctl enable --now amazon-ssm-agent
+echo "SSM_SETUP_START: $(date -Is)" | tee -a "$LOG_DEPLOY"
+
+# If snap service exists, use it
+if systemctl list-unit-files | grep -q '^snap.amazon-ssm-agent.amazon-ssm-agent.service'; then
+  systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+  echo "SSM: using snap service" | tee -a "$LOG_DEPLOY"
+
+# Else if deb service exists, use it
+elif systemctl list-unit-files | grep -q '^amazon-ssm-agent.service'; then
+  systemctl enable --now amazon-ssm-agent || true
+  echo "SSM: using deb service" | tee -a "$LOG_DEPLOY"
+
+# Else install via snap (most reliable on noble)
+else
+  apt-get install -y snapd || true
+  snap install amazon-ssm-agent --classic || true
+  systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || true
+  echo "SSM: installed via snap" | tee -a "$LOG_DEPLOY"
 fi
 
-echo "SSM_STATUS: $(systemctl is-active amazon-ssm-agent || true)" | tee -a "$LOG_DEPLOY"
+echo "SSM_STATUS: $(systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service 2>/dev/null || systemctl is-active amazon-ssm-agent 2>/dev/null || echo unknown)" | tee -a "$LOG_DEPLOY"
+echo "SSM_SETUP_DONE: $(date -Is)" | tee -a "$LOG_DEPLOY"
 
 ############################################
 # NGINX
