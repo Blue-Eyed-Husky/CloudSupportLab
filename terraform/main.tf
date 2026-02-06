@@ -1,4 +1,7 @@
-# Create a VPC
+############################################
+# Networking
+############################################
+
 resource "aws_vpc" "cloud_lab_vpc" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -9,17 +12,16 @@ resource "aws_vpc" "cloud_lab_vpc" {
   }
 }
 
-# Create a Subnet
 resource "aws_subnet" "cloud_lab_subnet" {
-  vpc_id     = aws_vpc.cloud_lab_vpc.id
-  cidr_block = var.subnet_cidr
+  vpc_id                  = aws_vpc.cloud_lab_vpc.id
+  cidr_block              = var.subnet_cidr
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "cloud lab subnet"
   }
 }
 
-# Create an Internet Gateway
 resource "aws_internet_gateway" "cloud_lab_igw" {
   vpc_id = aws_vpc.cloud_lab_vpc.id
 
@@ -28,7 +30,6 @@ resource "aws_internet_gateway" "cloud_lab_igw" {
   }
 }
 
-# Create a Route Table
 resource "aws_route_table" "cloud_lab_rt" {
   vpc_id = aws_vpc.cloud_lab_vpc.id
 
@@ -42,13 +43,15 @@ resource "aws_route_table" "cloud_lab_rt" {
   }
 }
 
-# Associate Route Table with subnet
 resource "aws_route_table_association" "cloud_lab_rta" {
   subnet_id      = aws_subnet.cloud_lab_subnet.id
   route_table_id = aws_route_table.cloud_lab_rt.id
 }
 
-# Create a Security Group
+############################################
+# Security
+############################################
+
 resource "aws_security_group" "cloud_lab_sg" {
   name        = "cloud_lab_sg"
   description = "Allow SSH and HTTP access"
@@ -65,7 +68,7 @@ resource "aws_security_group" "cloud_lab_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -76,32 +79,155 @@ resource "aws_security_group" "cloud_lab_sg" {
   }
 }
 
-# Create an EC2 Instance
-resource "aws_instance" "cloud_lab_instance" {
-  ami           = "ami-0290e60ec230db1e4" # Amazon Ubuntu 20.04 LTS in us-west-1
-  instance_type = var.instance_type
-  key_name      = "cloud_lab_key"
-  subnet_id     = aws_subnet.cloud_lab_subnet.id
-  #security_groups           = [aws_security_group.cloud_lab_sg.id]
-  associate_public_ip_address = true
+############################################
+# CloudWatch Logs (match user_data.sh prefix)
+############################################
 
-  vpc_security_group_ids = [aws_security_group.cloud_lab_sg.id]
-  iam_instance_profile   = aws_iam_instance_profile.cloud_lab_instance_profile.name
-
-  user_data = file("${path.module}/user_data.sh")
-
-  tags = {
-    Name = "cloud lab instance"
-  }
-
-  depends_on = [aws_iam_role_policy_attachment.cloud_lab_ssm_role_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_instance_role_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_artifacts_read_attachment,
-    aws_iam_role_policy_attachment.cloud_lab_cloudwatch_role_attachment
-  ]
+resource "aws_cloudwatch_log_group" "cloud_lab_nginx_access" {
+  name              = "/cloudlab/nginx/access"
+  retention_in_days = 7
 }
 
-# Add s3 bucket to instance role"
+resource "aws_cloudwatch_log_group" "cloud_lab_nginx_error" {
+  name              = "/cloudlab/nginx/error"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "cloud_lab_deploy" {
+  name              = "/cloudlab/deploy"
+  retention_in_days = 7
+}
+
+############################################
+# IAM (role, instance profile, policies)
+############################################
+
+resource "aws_iam_role" "cloud_lab_instance_role" {
+  name = "cloud_lab_instance_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "cloud_lab_instance_profile" {
+  name = "cloud_lab_instance_profile"
+  role = aws_iam_role.cloud_lab_instance_role.name
+}
+
+# SSM access (Session Manager)
+resource "aws_iam_role_policy_attachment" "cloud_lab_ssm_role_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# S3 bucket used by the instance (full access as you defined)
+resource "aws_iam_policy" "cloud_lab_s3_policy" {
+  name        = "cloud_lab_s3_policy"
+  description = "Policy to allow EC2 instance to access S3 bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          aws_s3_bucket.cloud_lab_bucket.arn,
+          "${aws_s3_bucket.cloud_lab_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cloud_lab_instance_role_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = aws_iam_policy.cloud_lab_s3_policy.arn
+}
+
+# Allow EC2 to READ deploy artifacts from artifacts bucket (deploy/* only)
+resource "aws_iam_policy" "cloud_lab_artifacts_read_policy" {
+  name        = "cloud_lab_artifacts_read_policy"
+  description = "Allow EC2 instance to read deployment artifacts from the artifacts bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListDeployPrefixOnly"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.cloud_lab_artifacts_bucket.arn]
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["deploy/*"]
+          }
+        }
+      },
+      {
+        Sid      = "GetDeployArtifactsOnly"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.cloud_lab_artifacts_bucket.arn}/deploy/*"]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cloud_lab_artifacts_read_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = aws_iam_policy.cloud_lab_artifacts_read_policy.arn
+}
+
+# CloudWatch Logs permissions (works for CloudWatch Agent)
+resource "aws_iam_policy" "cloud_lab_logs_policy" {
+  name        = "cloud_lab_logs_policy"
+  description = "Allow instance to write to CloudWatch Logs groups for nginx + deploy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "WriteLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        # PutLogEvents applies to LOG STREAM ARNs, so include :*
+        Resource = [
+          "${aws_cloudwatch_log_group.cloud_lab_nginx_access.arn}:*",
+          "${aws_cloudwatch_log_group.cloud_lab_nginx_error.arn}:*",
+          "${aws_cloudwatch_log_group.cloud_lab_deploy.arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cloud_lab_logs_attachment" {
+  role       = aws_iam_role.cloud_lab_instance_role.name
+  policy_arn = aws_iam_policy.cloud_lab_logs_policy.arn
+}
+
+############################################
+# S3 Buckets
+############################################
+
 resource "aws_s3_bucket" "cloud_lab_bucket" {
   bucket = var.my_s3_bucket
 
@@ -110,7 +236,6 @@ resource "aws_s3_bucket" "cloud_lab_bucket" {
   }
 }
 
-# Add s3 policy public access block
 resource "aws_s3_bucket_public_access_block" "cloud_lab_bucket_pab" {
   bucket = aws_s3_bucket.cloud_lab_bucket.id
 
@@ -120,7 +245,6 @@ resource "aws_s3_bucket_public_access_block" "cloud_lab_bucket_pab" {
   restrict_public_buckets = true
 }
 
-# add s3 artifacts bucket
 resource "aws_s3_bucket" "cloud_lab_artifacts_bucket" {
   bucket = var.s3_artifacts_bucket
 
@@ -129,7 +253,6 @@ resource "aws_s3_bucket" "cloud_lab_artifacts_bucket" {
   }
 }
 
-# Add artifacts policy public access block
 resource "aws_s3_bucket_public_access_block" "cloud_lab_artifacts_bucket_pab" {
   bucket = aws_s3_bucket.cloud_lab_artifacts_bucket.id
 
@@ -139,129 +262,22 @@ resource "aws_s3_bucket_public_access_block" "cloud_lab_artifacts_bucket_pab" {
   restrict_public_buckets = true
 }
 
-# Allow EC2 to READ deploy artifacts from the artifacts bucket (least privilege)
-resource "aws_iam_policy" "cloud_lab_artifacts_read_policy" {
-  name        = "cloud_lab_artifacts_read_policy"
-  description = "Allow EC2 instance to read deployment artifacts from the artifacts bucket"
+############################################
+# EC2 Instance
+############################################
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "ListDeployPrefixOnly"
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.cloud_lab_artifacts_bucket.arn
-        ]
-        Condition = {
-          StringLike = {
-            "s3:prefix" = ["deploy/*"]
-          }
-        }
-      },
-      {
-        Sid    = "GetDeployArtifactsOnly"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject"
-        ]
-        Resource = [
-          "${aws_s3_bucket.cloud_lab_artifacts_bucket.arn}/deploy/*"
-        ]
-      }
-    ]
-  })
-}
+resource "aws_instance" "cloud_lab_instance" {
+  ami                         = "ami-0290e60ec230db1e4" # (Your pinned AMI)
+  instance_type               = var.instance_type
+  key_name                    = "cloud_lab_key"
+  subnet_id                   = aws_subnet.cloud_lab_subnet.id
+  vpc_security_group_ids      = [aws_security_group.cloud_lab_sg.id]
+  iam_instance_profile        = aws_iam_instance_profile.cloud_lab_instance_profile.name
+  associate_public_ip_address = true
 
-# Attach the artifacts read-only policy to the EC2 instance role
-resource "aws_iam_role_policy_attachment" "cloud_lab_artifacts_read_attachment" {
-  role       = aws_iam_role.cloud_lab_instance_role.name
-  policy_arn = aws_iam_policy.cloud_lab_artifacts_read_policy.arn
-}
-# IAM Role for EC2 to access S3
-resource "aws_iam_role" "cloud_lab_instance_role" {
-  name = "cloud_lab_instance_role"
+  user_data = file("${path.module}/user_data.sh")
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      },
-    ]
-  })
-}
-
-# Create IAM policy to allow S3 access
-resource "aws_iam_policy" "cloud_lab_s3_policy" {
-  name        = "cloud_lab_s3_policy"
-  description = "Policy to allow EC2 instance to access S3 bucket"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "s3:ListBucket",
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject"
-        ]
-        Effect = "Allow"
-        Resource = [
-          aws_s3_bucket.cloud_lab_bucket.arn,
-          "${aws_s3_bucket.cloud_lab_bucket.arn}/*"
-        ]
-      },
-    ]
-  })
-}
-
-# Attach IAM policy to role to allow S3 access
-resource "aws_iam_role_policy_attachment" "cloud_lab_instance_role_attachment" {
-  role       = aws_iam_role.cloud_lab_instance_role.name
-  policy_arn = aws_iam_policy.cloud_lab_s3_policy.arn
-}
-
-# attach iam role to ssm instance profile
-resource "aws_iam_role_policy_attachment" "cloud_lab_ssm_role_attachment" {
-  role       = aws_iam_role.cloud_lab_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-# IAM instance profile for EC2
-resource "aws_iam_instance_profile" "cloud_lab_instance_profile" {
-  name = "cloud_lab_instance_profile"
-  role = aws_iam_role.cloud_lab_instance_role.name
-}
-
-# Adding CloudWatch policy to instance role for logging
-resource "aws_iam_role_policy_attachment" "cloud_lab_cloudwatch_role_attachment" {
-  role       = aws_iam_role.cloud_lab_instance_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-}
-
-# Creating cloudwatch log group for nginx access logs
-resource "aws_cloudwatch_log_group" "cloud_lab_nginx_access" {
-  name              = "/cloud_lab/nginx/access"
-  retention_in_days = 7
-}
-
-# Creating cloudwatch log groupo for nginx errors
-resource "aws_cloudwatch_log_group" "cloud_lab_nginx_error" {
-  name              = "/cloud_lab/nginx/error"
-  retention_in_days = 7
-}
-
-# Creating cloudwatch log group for deploy logs
-resource "aws_cloudwatch_log_group" "cloud_lab_deploy" {
-  name              = "/cloud_lab/deploy"
-  retention_in_days = 7
+  tags = {
+    Name = "cloud lab instance"
+  }
 }

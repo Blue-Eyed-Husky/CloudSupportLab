@@ -9,8 +9,18 @@ output "instance_public_dns" {
 }
 
 output "nginx_url" {
-  description = "URL to access NGINX server"
+  description = "URL to access the NGINX server"
   value       = "http://${aws_instance.cloud_lab_instance.public_ip}"
+}
+
+output "ec2_id" {
+  description = "EC2 instance ID"
+  value       = aws_instance.cloud_lab_instance.id
+}
+
+output "instance_state" {
+  description = "EC2 instance state"
+  value       = aws_instance.cloud_lab_instance.instance_state
 }
 
 output "vpc_id" {
@@ -19,26 +29,30 @@ output "vpc_id" {
 }
 
 output "public_subnet_id" {
-  description = "Public Subnet ID"
+  description = "Public subnet ID"
   value       = aws_subnet.cloud_lab_subnet.id
 }
 
 output "security_group_id" {
-  description = "Security Group ID"
+  description = "Security group ID"
   value       = aws_security_group.cloud_lab_sg.id
 }
 
-output "instance_state" {
-  description = "EC2 Instance State"
-  value       = aws_instance.cloud_lab_instance.instance_state
-}
-
 output "lab_bucket_name" {
-  description = "S3 Bucket Name"
-  value       = var.my_s3_bucket
+  description = "Primary lab S3 bucket name"
+  value       = aws_s3_bucket.cloud_lab_bucket.bucket
 }
 
-output "ec2_id" {
-  description = "EC2 Instance ID"
-  value       = aws_instance.cloud_lab_instance.id
+output "artifacts_bucket_name" {
+  description = "Artifacts S3 bucket name"
+  value       = aws_s3_bucket.cloud_lab_artifacts_bucket.bucket
+}
+
+output "cloudwatch_log_groups" {
+  description = "CloudWatch log groups used by the instance logging config"
+  value = {
+    nginx_access = aws_cloudwatch_log_group.cloud_lab_nginx_access.name
+    nginx_error  = aws_cloudwatch_log_group.cloud_lab_nginx_error.name
+    deploy       = aws_cloudwatch_log_group.cloud_lab_deploy.name
+  }
 }
