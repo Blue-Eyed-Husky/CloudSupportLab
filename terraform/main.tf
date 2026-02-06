@@ -84,17 +84,17 @@ resource "aws_security_group" "cloud_lab_sg" {
 ############################################
 
 resource "aws_cloudwatch_log_group" "cloud_lab_nginx_access" {
-  name              = "/cloudlab/nginx/access"
+  name              = "/cloud_lab/nginx/access"
   retention_in_days = 7
 }
 
 resource "aws_cloudwatch_log_group" "cloud_lab_nginx_error" {
-  name              = "/cloudlab/nginx/error"
+  name              = "/cloud_lab/nginx/error"
   retention_in_days = 7
 }
 
 resource "aws_cloudwatch_log_group" "cloud_lab_deploy" {
-  name              = "/cloudlab/deploy"
+  name              = "/cloud_lab/deploy"
   retention_in_days = 7
 }
 
