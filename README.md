@@ -17,20 +17,20 @@ SSM Agent
 GitHub Actions → Build Artifact → Private S3 Bucket → SSM Run Command → EC2 Deploy
 
 Key concepts demonstrated: 
-  Infrastructure as Code (Terraform)
-  System manger instead of SSH
-  IAM roles and least-privilege access
-  Artifact-based CI/CD deployment
-  IAM-controlled server access
-  Troubleshooting via incident documentation
-  CloudWatch and CloudTrail for observability and auditing
-  Separation of control plane (SSM/IAM) and data plane (application traffic)
+- Infrastructure as Code (Terraform)
+- System manger instead of SSH
+- IAM roles and least-privilege access
+- Artifact-based CI/CD deployment
+- IAM-controlled server access
+- Troubleshooting via incident documentation
+- CloudWatch and CloudTrail for observability and auditing
+- Separation of control plane (SSM/IAM) and data plane (application traffic)
 
 ## Repo Structure
-  terraform/ - infrastructure as code
-  incidents/ - real failure scenarios and root cause analysis
-  site/ - static website served by nginx
-  .github/workflows/ - CI/CD pipeline deploying via S3 + SSM
+- terraform/ - infrastructure as code
+- incidents/ - real failure scenarios and root cause analysis
+- site/ - static website served by nginx
+- .github/workflows/ - CI/CD pipeline deploying via S3 + SSM
 
 ## CI/CD Deployment Flow
 git push
